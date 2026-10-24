@@ -395,20 +395,29 @@
     try { return new Date(iso).toLocaleString('th-TH-u-ca-buddhist', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' }); } catch (e) { return String(iso || ''); }
   }
 
+  // Digital card styled after the printed card: cream Lanna background, logo, big store name and ID, QR.
   function cardNode(card, stale) {
     var qr = card.qr ? qrSvg(card.qr, true) : null;
-    return h('div', { class: 'card' },
-      h('div', { class: 'row wrap' },
-        h('span', { class: 'badge role', text: card.role === 'owner' ? 'เจ้าของร้าน' : 'พนักงาน' }),
-        stale ? h('span', { class: 'muted', text: 'กำลังอัปเดต...' }) : null),
-      h('div', { class: 'store', text: card.store }),
-      card.district ? h('div', { class: 'muted', text: 'อำเภอ ' + card.district }) : null,
-      h('div', { class: 'status ' + (card.active ? 'ok' : 'bad'), text: card.active ? 'ใช้งานได้ ถึง ' + card.validUntilText : 'หมดอายุ — กรุณาต่ออายุสมาชิก' }),
-      card.renewalDue ? h('div', { class: 'banner', text: 'ใกล้ถึงเวลาต่ออายุสมาชิกปี ' + (card.paidThroughYearBE + 1) + ' กรุณาติดต่อผู้ดูแลเพื่อต่ออายุ' }) : null,
-      h('div', { class: 'qrwrap' },
-        qr ? h('div', { class: 'qrbox' }, qr) : h('div', { class: 'banner', text: 'ยังไม่มี QR — แจ้งเลขที่สมาชิกกับเจ้าหน้าที่หน้างาน' }),
-        h('div', { class: 'qrid', text: 'เลขที่สมาชิก ' + card.memberId }),
-        qr ? h('div', { class: 'hint', text: 'เพิ่มความสว่างหน้าจอเมื่อสแกน' }) : null));
+    var yearBE = card.paidThroughYearBE;
+    var mc = h('div', { class: 'mcard' + (card.active ? '' : ' expired') },
+      h('div', { class: 'mc-top' },
+        h('span', { class: 'mc-role', text: card.role === 'owner' ? 'เจ้าของร้าน' : 'พนักงาน' }),
+        stale ? h('span', { class: 'mc-stale', text: 'กำลังอัปเดต...' }) : null),
+      h('div', { class: 'mc-logo', role: 'img', 'aria-label': 'ตราสมาคมการค้าร้านขายยาจังหวัดเชียงใหม่' }),
+      h('div', { class: 'mc-org' }, 'สมาคมการค้าร้านขายยา', h('br'), 'จังหวัดเชียงใหม่'),
+      h('div', { class: 'mc-year', text: yearBE ? 'บัตรสมาชิกประจำปี ' + yearBE : 'บัตรสมาชิก' }),
+      h('div', { class: 'mc-store', text: card.store }),
+      h('div', { class: 'mc-id', text: card.memberId }),
+      card.district ? h('div', { class: 'mc-dist', text: 'อำเภอ ' + card.district }) : null,
+      h('div', { class: 'mc-status ' + (card.active ? 'ok' : 'bad'), text: card.active ? 'สถานะ: ใช้งานได้' : 'หมดอายุ — กรุณาต่ออายุสมาชิก' }),
+      qr ? h('div', { class: 'mc-qr' }, qr) : h('div', { class: 'mc-noqr', text: 'ยังไม่มี QR — แจ้งเลขที่สมาชิกกับเจ้าหน้าที่หน้างาน' }),
+      qr ? h('div', { class: 'mc-hint', text: 'เพิ่มความสว่างหน้าจอเมื่อสแกน' }) : null,
+      h('div', { class: 'mc-exp', text: yearBE ? 'วันหมดอายุ 31 ธันวาคม ' + yearBE : 'ยังไม่มีข้อมูลการชำระค่าสมาชิก' }),
+      h('div', { class: 'mc-note' }, 'ต้องนำบัตรสมาชิกมาแสดงทุกครั้ง', h('br'), 'สมาชิกภาพจะสิ้นสุดทันทีที่ใบอนุญาตขายยาสิ้นสุด'),
+      card.active ? null : h('div', { class: 'mc-stamp', 'aria-hidden': 'true', text: 'หมดอายุ' }));
+    if (!card.renewalDue) return mc;
+    return h('div', null, mc,
+      h('div', { class: 'banner', text: 'ใกล้ถึงเวลาต่ออายุสมาชิกปี ' + (card.paidThroughYearBE + 1) + ' กรุณาติดต่อผู้ดูแลเพื่อต่ออายุ' }));
   }
 
   function showCachedCard() {
