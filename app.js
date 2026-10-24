@@ -251,9 +251,9 @@
     var me = S.me;
     var title = (me && me.state === 'linked' && me.card) ? me.card.store : 'บัตรสมาชิก';
     var initial = (me && me.displayName) ? Array.from(me.displayName)[0] : '★';
-    var main = h('main', { class: opts.tabs ? 'has-tabs' : '' }, content);
+    var main = h('main', { class: (opts.tabs ? 'has-tabs' : '') + (opts.noHeader ? ' no-head' : '') }, content);
     var kids = [
-      h('header', { class: 'top' }, h('div', { class: 'av', 'aria-hidden': 'true', text: initial }),
+      opts.noHeader ? null : h('header', { class: 'top' }, h('div', { class: 'av', 'aria-hidden': 'true', text: initial }),
         h('div', { class: 'grow' },
           h('div', { class: 't1', text: (me && me.displayName) ? 'สวัสดี ' + me.displayName : 'สมาคม / ระบบสมาชิก' }),
           h('div', { class: 't2', text: opts.tabs ? title : (opts.title || 'บัตรสมาชิก') }))),
@@ -263,7 +263,7 @@
       kids.push(h('nav', { class: 'tabs', 'aria-label': 'เมนู' },
         tabBtn('card', 'บัตรสมาชิก'), tabBtn('seminar', 'สัมมนา')));
     }
-    root.replaceChildren.apply(root, kids);
+    root.replaceChildren.apply(root, kids.filter(Boolean));
     window.scrollTo(0, 0);
   }
   function tabBtn(id, label) {
@@ -395,23 +395,24 @@
     try { return new Date(iso).toLocaleString('th-TH-u-ca-buddhist', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' }); } catch (e) { return String(iso || ''); }
   }
 
-  // Digital card styled after the printed card: cream Lanna background, logo, big store name and ID, QR.
+  // Digital card styled after the printed card. Compact so the whole card, QR included, fits one phone screen.
   function cardNode(card, stale) {
     var qr = card.qr ? qrSvg(card.qr, true) : null;
     var yearBE = card.paidThroughYearBE;
     var mc = h('div', { class: 'mcard' + (card.active ? '' : ' expired') },
       h('div', { class: 'mc-top' },
         h('span', { class: 'mc-role', text: card.role === 'owner' ? 'เจ้าของร้าน' : 'พนักงาน' }),
-        stale ? h('span', { class: 'mc-stale', text: 'กำลังอัปเดต...' }) : null),
-      h('div', { class: 'mc-logo', role: 'img', 'aria-label': 'ตราสมาคมการค้าร้านขายยาจังหวัดเชียงใหม่' }),
-      h('div', { class: 'mc-org' }, 'สมาคมการค้าร้านขายยา', h('br'), 'จังหวัดเชียงใหม่'),
-      h('div', { class: 'mc-year', text: yearBE ? 'บัตรสมาชิกประจำปี ' + yearBE : 'บัตรสมาชิก' }),
+        stale ? h('span', { class: 'mc-stale', text: 'กำลังอัปเดต...' }) : null,
+        h('span', { class: 'mc-status ' + (card.active ? 'ok' : 'bad'), text: card.active ? '● ใช้งานได้' : '● หมดอายุ' })),
+      h('div', { class: 'mc-head' },
+        h('div', { class: 'mc-logo', role: 'img', 'aria-label': 'ตราสมาคมการค้าร้านขายยาจังหวัดเชียงใหม่' }),
+        h('div', { class: 'mc-headtxt' },
+          h('div', { class: 'mc-org' }, 'สมาคมการค้าร้านขายยา', h('br'), 'จังหวัดเชียงใหม่'),
+          h('div', { class: 'mc-year', text: yearBE ? 'บัตรสมาชิกประจำปี ' + yearBE : 'บัตรสมาชิก' }))),
       h('div', { class: 'mc-store', text: card.store }),
       h('div', { class: 'mc-id', text: card.memberId }),
       card.district ? h('div', { class: 'mc-dist', text: 'อำเภอ ' + card.district }) : null,
-      h('div', { class: 'mc-status ' + (card.active ? 'ok' : 'bad'), text: card.active ? 'สถานะ: ใช้งานได้' : 'หมดอายุ — กรุณาต่ออายุสมาชิก' }),
-      qr ? h('div', { class: 'mc-qr' }, qr) : h('div', { class: 'mc-noqr', text: 'ยังไม่มี QR — แจ้งเลขที่สมาชิกกับเจ้าหน้าที่หน้างาน' }),
-      qr ? h('div', { class: 'mc-hint', text: 'เพิ่มความสว่างหน้าจอเมื่อสแกน' }) : null,
+      qr ? h('div', { class: 'mc-qr', title: 'เพิ่มความสว่างหน้าจอเมื่อสแกน' }, qr) : h('div', { class: 'mc-noqr', text: 'ยังไม่มี QR — แจ้งเลขที่สมาชิกกับเจ้าหน้าที่หน้างาน' }),
       h('div', { class: 'mc-exp', text: yearBE ? 'วันหมดอายุ 31 ธันวาคม ' + yearBE : 'ยังไม่มีข้อมูลการชำระค่าสมาชิก' }),
       h('div', { class: 'mc-note' }, 'ต้องนำบัตรสมาชิกมาแสดงทุกครั้ง', h('br'), 'สมาชิกภาพจะสิ้นสุดทันทีที่ใบอนุญาตขายยาสิ้นสุด'),
       card.active ? null : h('div', { class: 'mc-stamp', 'aria-hidden': 'true', text: 'หมดอายุ' }));
@@ -425,7 +426,7 @@
     if (!c || !c.card || !c.card.memberId) return false;
     S.me = { state: 'linked', displayName: c.displayName, card: c.card };
     S.tab = 'card';
-    shell(cardNode(c.card, true), { tabs: false });
+    shell(cardNode(c.card, true), { tabs: false, noHeader: true });
     return true;
   }
 
@@ -445,7 +446,7 @@
       });
     });
     nodes.push(h('div', { class: 'card' }, unlink, box));
-    shell(nodes, { tabs: true });
+    shell(nodes, { tabs: true, noHeader: true });
   }
 
   function ownerSection(me) {
