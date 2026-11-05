@@ -7,6 +7,7 @@
   var CACHE_KEY = 'cm_me_cache_v1';
   var SESSION_KEY = 'cm_session_v1';
   var GUARD_KEY = 'cm_idtoken_guard_v1';
+  var SEL_KEY = 'cm_sel_store_v1'; // last store viewed (multi-store accounts)
   var PREFIXES = ['นาย', 'นาง', 'นางสาว', 'ภก.', 'ภญ.', 'อื่นๆ'];
 
   var ERR = {
@@ -14,7 +15,8 @@
     UNAUTHENTICATED: 'เซสชันหมดอายุ กรุณาลองใหม่อีกครั้ง',
     ID_TOKEN_INVALID: 'การเข้าสู่ระบบ LINE หมดอายุ กรุณาเปิดหน้านี้ใหม่อีกครั้ง',
     NOT_LINKED: 'บัญชี LINE นี้ยังไม่ได้เชื่อมต่อกับร้าน',
-    ALREADY_LINKED: 'บัญชี LINE นี้เชื่อมต่อกับร้านแล้ว',
+    ALREADY_LINKED: 'บัญชี LINE นี้เชื่อมต่อกับร้านนี้แล้ว',
+    ACCOUNT_STORE_LIMIT: 'บัญชี LINE นี้เชื่อมร้านครบ 10 ร้านแล้ว หากต้องการเพิ่ม กรุณายกเลิกร้านที่ไม่ใช้ก่อน',
     RATE_LIMITED: 'ลองหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่ภายหลัง',
     NOT_OWNER: 'เฉพาะเจ้าของร้านเท่านั้นที่ทำรายการนี้ได้',
     STAFF_LIMIT: 'ร้านนี้มีพนักงานครบจำนวนสูงสุดแล้ว (3 คน)',
@@ -123,7 +125,7 @@
   }
 
   // ---------- LIFF / session ----------
-  var S = { me: null, seminars: null, tab: 'card', page: 'card', code: '', sessionPromise: null };
+  var S = { me: null, seminars: null, tab: 'card', page: 'card', code: '', sessionPromise: null, sel: sget('localStorage', SEL_KEY) || '' };
 
   function endpointBase() {
     return location.origin + location.pathname.replace(/index\.html$/, '');
@@ -177,6 +179,7 @@
     function once() {
       return getSession().then(function (tok) {
         var body = { action: action, session: tok };
+        if (S.sel) body.memberKey = S.sel; // selected store; the server falls back to the default store
         for (var k in (params || {})) body[k] = params[k];
         return transportRetry(body);
       }).catch(function (e) {
@@ -296,10 +299,40 @@
   function loadMe() {
     return call('me').then(function (me) {
       S.me = me;
+      setSel(me.card ? me.card.memberKey : '');
       if (me.state === 'linked' && me.card) sset('localStorage', CACHE_KEY, { displayName: me.displayName, card: me.card, ts: Date.now() });
       else sdel('localStorage', CACHE_KEY);
       return me;
     });
+  }
+
+  function setSel(key) {
+    S.sel = key || '';
+    if (S.sel) sset('localStorage', SEL_KEY, S.sel); else sdel('localStorage', SEL_KEY);
+  }
+  function storeCount() { return (S.me && S.me.stores) ? S.me.stores.length : 0; }
+
+  // Switch the card/seminar screens to another of this account's stores.
+  function selectStore(key) {
+    setSel(key);
+    S.seminars = null;
+    skeleton();
+    loadMe().then(function () { S.tab === 'seminar' ? showSeminars() : showCard(); },
+      function (e) { showError(e, function () { selectStore(key); }); });
+  }
+
+  // Store picker, shown only when this LINE account is linked to 2+ stores.
+  function storeSwitcher() {
+    var me = S.me;
+    if (!me || !me.stores || me.stores.length < 2 || !me.card) return null;
+    var sel = h('select', { id: 'store-sel', class: 'store-sel', 'aria-label': 'เลือกร้าน' },
+      me.stores.map(function (st) {
+        return h('option', { value: st.memberKey, text: st.store + ' (' + st.memberId + ')' + (st.active ? '' : ' • หมดอายุ'),
+          selected: st.memberKey === me.card.memberKey ? true : null });
+      }));
+    sel.value = me.card.memberKey;
+    sel.addEventListener('change', function () { selectStore(sel.value); });
+    return h('div', { class: 'switcher' }, h('label', { for: 'store-sel', text: 'ร้าน (' + me.stores.length + ')' }), sel);
   }
 
   function route() {
@@ -331,7 +364,20 @@
   function showErr(box, msg) { box.textContent = msg; box.style.display = msg ? 'block' : 'none'; }
 
   // ---------- screens ----------
-  function showLinkForm() {
+  // What changed since `before` (a snapshot from snapState): the new store's key, a new pending request, or nothing.
+  function snapState() {
+    var me = S.me || {};
+    return { keys: (me.stores || []).map(function (x) { return x.memberKey; }), pend: me.pending ? me.pending.createdAt + '|' + me.pending.memberId : '' };
+  }
+  function changedSince(before) {
+    var me = S.me || {};
+    var added = (me.stores || []).filter(function (x) { return before.keys.indexOf(x.memberKey) === -1; })[0];
+    var pend = me.pending ? me.pending.createdAt + '|' + me.pending.memberId : '';
+    return { added: added ? added.memberKey : '', newPending: !!pend && pend !== before.pend };
+  }
+
+  function showLinkForm(addMode) {
+    var before = snapState();
     var fId = field('f-id', 'เลขที่สมาชิก', { inputmode: 'text', maxlength: 20 }, true);
     var fPh = field('f-ph', 'เบอร์โทรศัพท์ที่ลงทะเบียนไว้', { type: 'tel', inputmode: 'tel', maxlength: 20 }, true);
     var fLic = field('f-lic', 'เลขที่ใบอนุญาตประกอบวิชาชีพเภสัชกรรม', { inputmode: 'text', maxlength: 20 }, true);
@@ -339,7 +385,7 @@
     var note = h('textarea', { id: 'f-note', maxlength: 300 });
     var acc = acceptRow('link');
     var box = errBox();
-    var btn = h('button', { class: 'btn', type: 'button', text: 'เชื่อมต่อบัญชี' });
+    var btn = h('button', { class: 'btn', type: 'button', text: addMode ? 'เพิ่มร้าน' : 'เชื่อมต่อบัญชี' });
     btn.addEventListener('click', function () {
       var memberId = fId.input.value.trim(), phone = fPh.input.value.trim(), lic = fLic.input.value.trim();
       if (!memberId) return showErr(box, 'กรุณากรอกเลขที่สมาชิก');
@@ -349,27 +395,38 @@
       showErr(box, '');
       busy(btn, 'กำลังตรวจสอบ...', function () {
         return call('link', { memberId: memberId, phone: phone, license: lic, store: fSt.input.value.trim(), note: note.value.trim(), accept: true })
-          .then(function () { return loadMe(); })
-          .then(function () { toast('ส่งข้อมูลแล้ว'); route(); });
+          .then(function (d) {
+            if (d && d.result === 'linked' && d.memberKey) setSel(d.memberKey); // show the store just added
+            return loadMe().then(function () { return d; });
+          })
+          .then(function (d) {
+            toast(d && d.result === 'linked' ? (addMode ? 'เพิ่มร้านแล้ว' : 'เชื่อมต่อสำเร็จ') : 'ส่งคำขอให้ผู้ดูแลตรวจสอบแล้ว');
+            S.page = 'card'; route();
+          });
       }).catch(function (e) {
         if (e.network) { // outcome unknown: re-query instead of retrying
-          return loadMe().then(function (me) {
-            if (me.state !== 'unlinked') route();
+          return loadMe().then(function () {
+            var c = changedSince(before);
+            if (c.added) { setSel(c.added); return loadMe().then(function () { S.page = 'card'; route(); }); }
+            if (c.newPending) { S.page = 'card'; route(); }
             else showErr(box, 'ไม่แน่ใจว่าส่งข้อมูลสำเร็จหรือไม่ — ยังไม่พบคำขอของคุณ กรุณากดส่งอีกครั้ง');
           }, function (e2) { showErr(box, friendly(e2)); });
         }
-        if (e.code === 'ALREADY_LINKED') return loadMe().then(route, function () { showErr(box, friendly(e)); });
+        if (e.code === 'ALREADY_LINKED' && !addMode) return loadMe().then(route, function () { showErr(box, friendly(e)); });
         showErr(box, friendly(e));
       });
     });
+    var pend = addMode && S.me && S.me.pending;
     shell([
       h('div', { class: 'card' },
-        h('h2', { text: 'เชื่อมต่อบัญชีกับร้านสมาชิก' }),
-        h('p', { class: 'muted', text: 'กรอกข้อมูลให้ตรงกับที่ลงทะเบียนไว้กับสมาคม เพื่อเปิดบัตรสมาชิกในบัญชี LINE นี้' }),
+        h('h2', { text: addMode ? 'เพิ่มร้านสมาชิกในบัญชีนี้' : 'เชื่อมต่อบัญชีกับร้านสมาชิก' }),
+        h('p', { class: 'muted', text: addMode ? 'สำหรับผู้ที่เป็นเจ้าของหลายร้าน กรอกข้อมูลของร้านที่ต้องการเพิ่มให้ตรงกับที่ลงทะเบียนไว้กับสมาคม' : 'กรอกข้อมูลให้ตรงกับที่ลงทะเบียนไว้กับสมาคม เพื่อเปิดบัตรสมาชิกในบัญชี LINE นี้' }),
+        pend ? h('div', { class: 'banner', text: 'มีคำขอเลขที่สมาชิก ' + pend.memberId + ' รอตรวจสอบอยู่ หากส่งคำขอใหม่แล้วไม่ตรงกับข้อมูล คำขอเดิมจะถูกแทนที่' }) : null,
         fId.node, fPh.node, fLic.node, fSt.node,
         h('label', { for: 'f-note', text: 'หมายเหตุถึงผู้ดูแล (ถ้ามี)' }), note,
-        noticeBlock('link'), acc.row, box, btn)
-    ]);
+        noticeBlock('link'), acc.row, box, btn,
+        addMode ? h('button', { class: 'btn secondary', type: 'button', text: 'กลับ', onclick: function () { showCard(); } }) : null)
+    ], { title: addMode ? 'เพิ่มร้าน' : null });
   }
 
   function showPending() {
@@ -433,20 +490,38 @@
   function showCard() {
     var me = S.me, card = me.card;
     if (!card) return showLinkForm();
-    var nodes = [cardNode(card, false)];
+    var multi = storeCount() > 1;
+    var nodes = [storeSwitcher(), cardNode(card, false)];
+    if (me.pending) nodes.push(pendingBanner(me.pending));
     if (card.role === 'owner') nodes.push(ownerSection(me));
     var box = errBox();
-    var unlink = h('button', { class: 'btn ghost', type: 'button', text: 'ยกเลิกการเชื่อมต่อบัญชีนี้' });
+    var unlink = h('button', { class: 'btn ghost', type: 'button', text: multi ? 'ยกเลิกการเชื่อมต่อร้านนี้' : 'ยกเลิกการเชื่อมต่อบัญชีนี้' });
     unlink.addEventListener('click', function () {
       var owner = card.role === 'owner';
-      confirmDlg('ยกเลิกการเชื่อมต่อ', owner ? 'คุณเป็นเจ้าของร้าน หากยกเลิก ร้านจะไม่มีเจ้าของจนกว่าจะมีการเชื่อมต่อใหม่หรือผู้ดูแลกำหนดให้ ต้องการดำเนินการต่อหรือไม่?' : 'ต้องการยกเลิกการเชื่อมต่อบัญชี LINE นี้กับร้านหรือไม่?', 'ยกเลิกการเชื่อมต่อ', true).then(function (ok) {
+      var which = multi ? ' "' + card.store + '"' : '';
+      confirmDlg('ยกเลิกการเชื่อมต่อ', owner ? 'คุณเป็นเจ้าของร้าน' + which + ' หากยกเลิก ร้านจะไม่มีเจ้าของจนกว่าจะมีการเชื่อมต่อใหม่หรือผู้ดูแลกำหนดให้ ต้องการดำเนินการต่อหรือไม่?' : 'ต้องการยกเลิกการเชื่อมต่อบัญชี LINE นี้กับร้าน' + which + 'หรือไม่?', 'ยกเลิกการเชื่อมต่อ', true).then(function (ok) {
         if (!ok) return;
-        busy(unlink, 'กำลังดำเนินการ...', function () { return call('unlinkSelf').then(function () { sdel('localStorage', CACHE_KEY); S.seminars = null; S.page = 'card'; return loadMe(); }).then(route); })
+        busy(unlink, 'กำลังดำเนินการ...', function () { return call('unlinkSelf', { memberKey: card.memberKey }).then(function () { sdel('localStorage', CACHE_KEY); setSel(''); S.seminars = null; S.page = 'card'; return loadMe(); }).then(route); })
           .catch(function (e) { showErr(box, friendly(e)); });
       });
     });
-    nodes.push(h('div', { class: 'card' }, unlink, box));
+    var canAdd = storeCount() < (me.storeMax || 10);
+    var addBtn = canAdd ? h('button', { class: 'btn secondary', type: 'button', text: '+ เพิ่มร้าน (สำหรับเจ้าของหลายร้าน)', onclick: function () { showLinkForm(true); } }) : null;
+    nodes.push(h('div', { class: 'card' }, addBtn, unlink, box));
     shell(nodes, { tabs: true, noHeader: true });
+  }
+
+  // A link request for another store, waiting for an admin (the account already has a card).
+  function pendingBanner(p) {
+    var box = errBox();
+    var cancel = h('button', { class: 'link', type: 'button', text: 'ยกเลิกคำขอ' });
+    cancel.addEventListener('click', function () {
+      confirmDlg('ยกเลิกคำขอ', 'ยกเลิกคำขอเชื่อมร้านเลขที่สมาชิก ' + p.memberId + ' หรือไม่?', 'ยกเลิกคำขอ', true).then(function (ok) {
+        if (!ok) return;
+        busy(cancel, '...', function () { return call('cancelPending').then(loadMe).then(showCard); }).catch(function (e) { showErr(box, friendly(e)); });
+      });
+    });
+    return h('div', { class: 'banner' }, 'คำขอเชื่อมร้านเลขที่สมาชิก ' + p.memberId + ' รอผู้ดูแลตรวจสอบ', cancel, box);
   }
 
   function ownerSection(me) {
@@ -514,12 +589,7 @@
   }
 
   function showInvite() {
-    var me = S.me, code = S.code;
-    if (me.state === 'linked') {
-      return shell(h('div', { class: 'card center' }, h('h2', { text: 'บัญชีนี้เชื่อมต่อกับร้านแล้ว' }),
-        h('p', { text: 'หากต้องการเข้าร่วมร้านอื่น กรุณายกเลิกการเชื่อมต่อปัจจุบันก่อน' }),
-        h('button', { class: 'btn', type: 'button', text: 'ไปที่บัตรสมาชิก', onclick: function () { S.page = 'card'; route(); } })));
-    }
+    var me = S.me, code = S.code, before = snapState();
     if (!/^[A-Za-z0-9_-]{8,64}$/.test(code || '')) {
       return shell(h('div', { class: 'card center' }, h('h2', { text: 'ลิงก์เชิญไม่ถูกต้อง' }), h('p', { text: ERR.INVITE_INVALID })));
     }
@@ -530,25 +600,33 @@
       if (!acc.cb.checked) return showErr(box, 'กรุณาติ๊กรับทราบนโยบายความเป็นส่วนตัว');
       showErr(box, '');
       busy(btn, 'กำลังเชื่อมต่อ...', function () {
-        return call('redeemInvite', { code: code, accept: true }).then(loadMe).then(function () { toast('เชื่อมต่อสำเร็จ'); S.page = 'card'; route(); });
+        return call('redeemInvite', { code: code, accept: true }).then(function (d) {
+          if (d && d.memberKey) setSel(d.memberKey);
+          return loadMe();
+        }).then(function () { toast('เชื่อมต่อสำเร็จ'); S.page = 'card'; route(); });
       }).catch(function (e) {
         if (e.network) {
-          return loadMe().then(function (m) {
-            if (m.state === 'linked') { S.page = 'card'; route(); } else showErr(box, 'ไม่แน่ใจว่าเชื่อมต่อสำเร็จหรือไม่ กรุณากดอีกครั้ง');
+          return loadMe().then(function () {
+            var c = changedSince(before);
+            if (c.added) { setSel(c.added); return loadMe().then(function () { S.page = 'card'; route(); }); }
+            showErr(box, 'ไม่แน่ใจว่าเชื่อมต่อสำเร็จหรือไม่ กรุณากดอีกครั้ง');
           }, function (e2) { showErr(box, friendly(e2)); });
         }
         showErr(box, friendly(e));
       });
     });
+    var linked = me.state === 'linked';
     shell(h('div', { class: 'card' }, h('h2', { text: 'คำเชิญเป็นพนักงานร้าน' }),
       h('p', { text: 'คุณได้รับเชิญให้เชื่อมต่อบัญชี LINE นี้กับร้านสมาชิกในฐานะพนักงาน เพื่อใช้บัตรสมาชิกและลงทะเบียนสัมมนา' }),
-      noticeBlock('inv'), acc.row, box, btn));
+      linked ? h('p', { class: 'muted', text: 'บัญชีนี้มีร้านอยู่แล้ว ร้านที่เชิญจะถูกเพิ่มเป็นอีกร้านหนึ่ง และเลือกดูได้จากหน้าบัตรสมาชิก' }) : null,
+      noticeBlock('inv'), acc.row, box, btn,
+      linked ? h('button', { class: 'btn secondary', type: 'button', text: 'ไปที่บัตรสมาชิก', onclick: function () { S.page = 'card'; route(); } }) : null));
   }
 
   // ---------- seminars ----------
   function showSeminars() {
     S.tab = 'seminar';
-    shell(h('div', { class: 'card', 'aria-busy': 'true' }, h('div', { class: 'sk', style: 'height:26px;width:60%;margin:8px 0' }), h('div', { class: 'sk', style: 'height:90px;margin:8px 0' })), { tabs: true });
+    shell([storeSwitcher(), h('div', { class: 'card', 'aria-busy': 'true' }, h('div', { class: 'sk', style: 'height:26px;width:60%;margin:8px 0' }), h('div', { class: 'sk', style: 'height:90px;margin:8px 0' }))], { tabs: true });
     call('seminars').then(function (d) { S.seminars = d.seminars || []; renderSeminars(); },
       function (e) { shell([h('div', { class: 'card center' }, h('p', { text: friendly(e) }), h('button', { class: 'btn', type: 'button', text: 'ลองอีกครั้ง', onclick: showSeminars }))], { tabs: true }); });
   }
@@ -560,7 +638,7 @@
   function renderSeminars() {
     var card = S.me && S.me.card;
     var active = !!(card && card.active);
-    var nodes = [];
+    var nodes = [storeSwitcher()];
     if (!active) nodes.push(h('div', { class: 'banner err', text: 'สมาชิกหมดอายุ — ดูรายการสัมมนาได้ แต่ต้องต่ออายุสมาชิกก่อนจึงจะลงทะเบียนได้' }));
     if (!S.seminars.length) nodes.push(h('div', { class: 'card center' }, h('p', { class: 'muted', text: 'ยังไม่มีสัมมนาที่เปิดรับลงทะเบียน' })));
     S.seminars.forEach(function (sem) { nodes.push(seminarCard(sem, active)); });
