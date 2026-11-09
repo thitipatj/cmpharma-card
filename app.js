@@ -349,8 +349,19 @@
   function noticeBlock(idPrefix) {
     return h('div', null,
       h('p', { class: 'notice-sum', text: 'เราเก็บชื่อร้าน เลขสมาชิก เบอร์โทร เลขใบอนุญาต และชื่อบัญชี LINE เพื่อยืนยันตัวตนสมาชิก ออกบัตรสมาชิก และจัดการลงทะเบียนสัมมนา ข้อมูลเข้าถึงได้เฉพาะผู้ดูแลระบบ และจะไม่เปิดเผยแก่บุคคลภายนอก' }),
-      h('details', null, h('summary', { text: 'อ่านนโยบายความเป็นส่วนตัวฉบับเต็ม' }),
-        h('div', { id: idPrefix + '-full', text: '[ข้อความนโยบายความเป็นส่วนตัวฉบับเต็ม — เวอร์ชัน ' + (CFG.NOTICE_VERSION || '') + ' — ผู้ดูแลระบบจะเพิ่มข้อความจริงที่นี่]' })));
+      h('p', null, privacyLink('อ่านประกาศความเป็นส่วนตัวฉบับเต็ม')));
+  }
+  // Opens privacy.html over the app (LINE in-app browser), so the form the user is filling stays put.
+  function privacyLink(label) {
+    var url = new URL('privacy.html?v=' + encodeURIComponent(CFG.NOTICE_VERSION || ''), location.href).href;
+    var a = h('a', { href: url, target: '_blank', rel: 'noopener', text: label });
+    a.addEventListener('click', function (e) {
+      if (window.liff && liff.openWindow && liff.isInClient && liff.isInClient()) {
+        e.preventDefault();
+        liff.openWindow({ url: url, external: false });
+      }
+    });
+    return a;
   }
   function acceptRow(idPrefix) {
     var cb = h('input', { type: 'checkbox', id: idPrefix + '-accept' });
@@ -508,6 +519,7 @@
     var canAdd = storeCount() < (me.storeMax || 10);
     var addBtn = canAdd ? h('button', { class: 'btn secondary', type: 'button', text: '+ เพิ่มร้าน (สำหรับเจ้าของหลายร้าน)', onclick: function () { showLinkForm(true); } }) : null;
     nodes.push(h('div', { class: 'card' }, addBtn, unlink, box));
+    nodes.push(h('p', { class: 'muted', style: 'text-align:center;margin:4px 0 12px' }, privacyLink('ประกาศความเป็นส่วนตัว')));
     shell(nodes, { tabs: true, noHeader: true });
   }
 
