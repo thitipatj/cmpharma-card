@@ -467,7 +467,7 @@
   function cardNode(card, stale) {
     var qr = card.active && card.qr ? qrSvg(card.qr, true) : null; // expired: no QR at all
     var yearBE = card.paidThroughYearBE;
-    var mc = h('div', { class: 'mcard' + (card.active ? '' : ' expired') },
+    var mc = h('div', { class: 'mcard' + (card.paidThroughYear >= 2027 ? ' y2027' : '') + (card.active ? '' : ' expired') },
       h('div', { class: 'mc-top' },
         h('span', { class: 'mc-role', text: card.role === 'owner' ? 'เจ้าของร้าน' : 'พนักงาน' }),
         stale ? h('span', { class: 'mc-stale', text: 'กำลังอัปเดต...' }) : null,
