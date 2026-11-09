@@ -102,8 +102,8 @@ main.no-head{padding-top:calc(10px + env(safe-area-inset-top))}
   color:#221c14;box-shadow:0 10px 28px rgba(60,40,10,.18);border:1px solid #d8cbb0;
   background:linear-gradient(180deg,rgba(240,233,218,.0) 40%,rgba(240,233,218,.55) 100%),
     url(img/chedi.webp) 62% 100%/auto 80% no-repeat,#efe7d6}
-/* 2027+ cards: watercolor design (card_design/), full-bleed */
-.mcard.y2027{background:url(img/card-2027.webp) center/cover no-repeat,#f3eedf}
+/* 2027+ cards: design B1 (card_design/Generated_Image_lwELQFxo82k5kY5t_1.png), lower crop */
+.mcard.y2027{background:url(img/card-2027b.webp) center 80%/cover no-repeat,#eef3e6}
 .mcard.y2027::before{background:linear-gradient(180deg,rgba(250,246,234,.78) 0%,rgba(250,246,234,.62) 34%,rgba(250,246,234,.25) 50%,rgba(250,246,234,.25) 72%,rgba(250,246,234,.8) 88%,rgba(250,246,234,.9) 100%)}
 .mcard.y2027 .mc-headtxt,.mcard.y2027 .mc-store,.mcard.y2027 .mc-id,.mcard.y2027 .mc-dist,.mcard.y2027 .mc-exp,.mcard.y2027 .mc-note{text-shadow:0 0 6px #fbf7ec,0 0 3px #fbf7ec}
 .mcard.y2027 .mc-role{background:rgba(250,246,234,.9)}
