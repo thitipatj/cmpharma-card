@@ -396,7 +396,12 @@
       if (v !== fId.input.value) fId.input.value = v;
     });
     var fPh = field('f-ph', 'เบอร์โทรศัพท์ที่ลงทะเบียนไว้', { type: 'tel', inputmode: 'tel', maxlength: 20 }, true);
-    var fLic = field('f-lic', 'เลขที่ใบอนุญาตประกอบวิชาชีพเภสัชกรรม', { inputmode: 'text', maxlength: 20 }, true);
+    var fLic = field('f-lic', 'เลขที่ใบอนุญาตประกอบวิชาชีพเภสัชกรรม', { inputmode: 'numeric', pattern: '[0-9]*', maxlength: 20, placeholder: 'เช่น 112561' }, true,
+      'ใส่เฉพาะตัวเลข ไม่ต้องใส่ ชม. ลพ. หรือ / เช่น ชม.11/2561 ให้กรอก 112561');
+    fLic.input.addEventListener('input', function () { // digits only ('ชม.11/2561' pasted → '112561')
+      var v = fLic.input.value.replace(/\D/g, '');
+      if (v !== fLic.input.value) fLic.input.value = v;
+    });
     var fSt = field('f-st', 'ชื่อร้าน (ถ้ามี)', { maxlength: 100 }, false);
     var note = h('textarea', { id: 'f-note', maxlength: 300 });
     var acc = acceptRow('link');
