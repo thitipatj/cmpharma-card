@@ -396,7 +396,7 @@
       if (v !== fId.input.value) fId.input.value = v;
     });
     var fPh = field('f-ph', 'เบอร์โทรศัพท์ที่ลงทะเบียนไว้', { type: 'tel', inputmode: 'tel', maxlength: 20 }, true);
-    var fLic = field('f-lic', 'เลขที่ใบอนุญาตประกอบวิชาชีพเภสัชกรรม', { inputmode: 'numeric', pattern: '[0-9]*', maxlength: 20, placeholder: 'เช่น 112561' }, true,
+    var fLic = field('f-lic', 'เลขที่ใบอนุญาตขายยา', { inputmode: 'numeric', pattern: '[0-9]*', maxlength: 20, placeholder: 'เช่น 112561' }, true,
       'ใส่เฉพาะตัวเลข ไม่ต้องใส่ ชม. ลพ. หรือ / เช่น ชม.11/2561 ให้กรอก 112561');
     fLic.input.addEventListener('input', function () { // digits only ('ชม.11/2561' pasted → '112561')
       var v = fLic.input.value.replace(/\D/g, '');
@@ -411,7 +411,7 @@
       var memberId = fId.input.value.trim(), phone = fPh.input.value.trim(), lic = fLic.input.value.trim();
       if (!/^\d{3}$/.test(memberId)) return showErr(box, 'กรุณากรอกเลขที่สมาชิกเป็นตัวเลข 3 หลัก เช่น 002 หรือ 901');
       if (!normalizePhone(phone)) return showErr(box, 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง');
-      if (!normalizeLicense(lic)) return showErr(box, 'กรุณากรอกเลขที่ใบอนุญาต');
+      if (!normalizeLicense(lic)) return showErr(box, 'กรุณากรอกเลขที่ใบอนุญาตขายยา');
       if (!acc.cb.checked) return showErr(box, 'กรุณาติ๊กรับทราบนโยบายความเป็นส่วนตัว');
       showErr(box, '');
       busy(btn, 'กำลังตรวจสอบ...', function () {
