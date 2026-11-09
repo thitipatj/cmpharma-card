@@ -465,7 +465,7 @@
 
   // Digital card styled after the printed card. Compact so the whole card, QR included, fits one phone screen.
   function cardNode(card, stale) {
-    var qr = card.qr ? qrSvg(card.qr, true) : null;
+    var qr = card.active && card.qr ? qrSvg(card.qr, true) : null; // expired: no QR at all
     var yearBE = card.paidThroughYearBE;
     var mc = h('div', { class: 'mcard' + (card.active ? '' : ' expired') },
       h('div', { class: 'mc-top' },
@@ -480,7 +480,10 @@
       h('div', { class: 'mc-store', text: card.store }),
       h('div', { class: 'mc-id', text: card.memberId }),
       card.district ? h('div', { class: 'mc-dist', text: 'อำเภอ ' + card.district }) : null,
-      qr ? h('div', { class: 'mc-qr', title: 'เพิ่มความสว่างหน้าจอเมื่อสแกน' }, qr) : h('div', { class: 'mc-noqr', text: 'ยังไม่มี QR — แจ้งเลขที่สมาชิกกับเจ้าหน้าที่หน้างาน' }),
+      qr ? h('div', { class: 'mc-qr', title: 'เพิ่มความสว่างหน้าจอเมื่อสแกน' }, qr)
+        : !card.active ? h('div', { class: 'mc-noqr bad' }, 'บัตรหมดอายุ ไม่มี QR', h('br'),
+          h('span', { class: 'mc-noqr-sub', text: 'กรุณาต่ออายุสมาชิกกับสมาคม หรือแจ้งเลขที่สมาชิกกับเจ้าหน้าที่หน้างานสัมมนาเพื่อต่ออายุ' }))
+        : h('div', { class: 'mc-noqr', text: 'ยังไม่มี QR — แจ้งเลขที่สมาชิกกับเจ้าหน้าที่หน้างาน' }),
       h('div', { class: 'mc-exp', text: yearBE ? 'วันหมดอายุ 31 ธันวาคม ' + yearBE : 'ยังไม่มีข้อมูลการชำระค่าสมาชิก' }),
       h('div', { class: 'mc-note' }, 'ต้องนำบัตรสมาชิกมาแสดงทุกครั้ง', h('br'), 'สมาชิกภาพจะสิ้นสุดทันทีที่ใบอนุญาตขายยาสิ้นสุด'),
       card.active ? null : h('div', { class: 'mc-stamp', 'aria-hidden': 'true', text: 'หมดอายุ' }));
