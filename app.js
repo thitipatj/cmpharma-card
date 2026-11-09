@@ -389,7 +389,12 @@
 
   function showLinkForm(addMode) {
     var before = snapState();
-    var fId = field('f-id', 'เลขที่สมาชิก', { inputmode: 'text', maxlength: 20 }, true);
+    var fId = field('f-id', 'เลขที่สมาชิก', { inputmode: 'numeric', pattern: '[0-9]*', maxlength: 3, placeholder: 'เช่น 002' }, true,
+      'ตัวเลข 3 หลัก เช่น 002 หรือ 901 (ไม่ต้องใส่ ว.)');
+    fId.input.addEventListener('input', function () { // digits only, max 3 ('ว.901' typed or pasted → '901')
+      var v = fId.input.value.replace(/\D/g, '').slice(0, 3);
+      if (v !== fId.input.value) fId.input.value = v;
+    });
     var fPh = field('f-ph', 'เบอร์โทรศัพท์ที่ลงทะเบียนไว้', { type: 'tel', inputmode: 'tel', maxlength: 20 }, true);
     var fLic = field('f-lic', 'เลขที่ใบอนุญาตประกอบวิชาชีพเภสัชกรรม', { inputmode: 'text', maxlength: 20 }, true);
     var fSt = field('f-st', 'ชื่อร้าน (ถ้ามี)', { maxlength: 100 }, false);
@@ -399,7 +404,7 @@
     var btn = h('button', { class: 'btn', type: 'button', text: addMode ? 'เพิ่มร้าน' : 'เชื่อมต่อบัญชี' });
     btn.addEventListener('click', function () {
       var memberId = fId.input.value.trim(), phone = fPh.input.value.trim(), lic = fLic.input.value.trim();
-      if (!memberId) return showErr(box, 'กรุณากรอกเลขที่สมาชิก');
+      if (!/^\d{3}$/.test(memberId)) return showErr(box, 'กรุณากรอกเลขที่สมาชิกเป็นตัวเลข 3 หลัก เช่น 002 หรือ 901');
       if (!normalizePhone(phone)) return showErr(box, 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง');
       if (!normalizeLicense(lic)) return showErr(box, 'กรุณากรอกเลขที่ใบอนุญาต');
       if (!acc.cb.checked) return showErr(box, 'กรุณาติ๊กรับทราบนโยบายความเป็นส่วนตัว');
